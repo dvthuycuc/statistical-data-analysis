@@ -1,0 +1,358 @@
+---
+title: "Descriptive Statitic"
+format: html
+editor: visual
+engine: knitr
+runtime: shiny
+---
+
+### Import Libraries and Get Data
+
+```{r setup, message=FALSE, warning=FALSE}
+library(duckdb)
+library(dplyr)
+library(ggplot2)
+library(ggdist)
+library(stringr)
+library(qqplotr)
+library(lubridate)
+library(ggridges)
+source("helper.R")
+
+db_path <- Sys.getenv("STEAM_DB_PATH", "C:/Users/TCC/Documents/git_cuc/teaching-data/steam_data/steam_data.duckdb")
+con <- dbConnect(duckdb::duckdb(), db_path)
+df_app <- dbReadTable(con, "STEAM_APPDETAILS")
+df_app |> 
+  select(name, metacritic_score) |> 
+  head(5)
+```
+
+### Measures of Central Tendency
+
+#### Calculate Mean, Median and Mode
+
+```{r}
+mean_score <- mean(df_app$metacritic_score)
+cat("Mean Metacritic score:", mean_score, "\n")
+
+median_score  <- median(df_app$metacritic_score)
+cat("Median Metacritic score:", median_score, "\n")
+
+mode_score  <- mode_value(df_app$metacritic_score)
+cat("Mode Metacritic score:", mode_score, "\n")
+cat(
+  "Interpretation:\n",
+  "- The mean and median differ because the distribution is skewed.\n",
+  "- Many apps do not have a Metacritic score and are recorded as 0.\n",
+  "- These zero values pull the mean downward and create a spike at 0.\n"
+)
+```
+
+#### Draw Histogram Chart to verify chart
+
+```{r}
+draw_histogram(
+  df_app$metacritic_score,
+  title = "Histogram of Metacritic Scores",
+  x_label = "Metacritic Score"
+)
+```
+
+#### Filter out all the app has score equal 0 and recalculate Mean, Median, Mode value
+
+```{r}
+df_app <- df_app |>
+  filter(metacritic_score > 0) 
+
+mean_score <- mean(df_app$metacritic_score)
+cat("Mean Metacritic score:", mean_score, "\n")
+
+median_score  <- median(df_app$metacritic_score)
+cat("Median Metacritic score:", median_score, "\n")
+
+mode_score  <- mode_value(df_app$metacritic_score)
+cat("Mode Metacritic score:", mode_score, "\n")
+```
+
+### Measures of Variability or Dispersion
+
+```{r}
+max_score <- max(df_app$metacritic_score)
+min_score <- min(df_app$metacritic_score)
+range_score <- max_score - min_score
+cat("Range Metacritic score:", mean_score, "\n")
+
+var_score <- var(df_app$metacritic_score)
+cat("Variance Metacritic score:", var_score, "\n")
+
+std_score <- sqrt(var_score)
+cat("Standard Deviation Metacritic score:", std_score, "\n")
+
+```
+
+#### Summary Statistic
+
+```{r}
+q1_score <- quantile(df_app$metacritic_score, 0.25)
+cat("Quantile value of 25th percentile:", q1_score, "\n")
+q2_score <- quantile(df_app$metacritic_score, 0.5)
+cat("Quantile value of 50th percentile:", q2_score, "\n")
+q3_score <- quantile(df_app$metacritic_score, 0.75)
+cat("Quantile value of 75th percentile:", q3_score, "\n")
+```
+
+#### Frequency Distributions
+
+```{r}
+# Histogram
+ggplot(df_app, aes(x = metacritic_score)) +
+    geom_histogram(aes(y = after_stat(density)),
+                   bins = 30, fill = "lightblue", color = "white") +
+    labs(
+      title = "Histogram of Metacritic Scores",
+      x = "Metacritic Score",
+      y = "Density"
+    ) +
+    theme_minimal()
+```
+
+```{r}
+# Density Plot
+ggplot(df_app, aes(x = metacritic_score)) +
+    geom_density(color = "black", fill = "lightgrey", linewidth = 1) +
+    labs(
+      title = "Density Plot of Metacritic Scores",
+      x = "Metacritic Score",
+      y = "Density"
+    ) +
+    theme_minimal()
+```
+
+```{r}
+# Boxplot
+boxplot(
+  df_app$metacritic_score,
+  main = "Distribution of Metacritic Scores",
+  ylab = "Metacritic Score"
+)
+```
+
+```{r}
+# Histogram with an overlayed boxplot.
+x <- df_app$metacritic_score
+x <- x[is.finite(x)]
+
+h <- hist(x, breaks = 30, plot = FALSE)
+max_count <- max(h$counts)
+
+bp <- boxplot.stats(x)
+w_low <- bp$stats[1]
+q1    <- bp$stats[2]
+med   <- bp$stats[3]
+q3    <- bp$stats[4]
+w_high<- bp$stats[5]
+outs  <- bp$out
+
+y_pos <- max_count * 0.55
+box_h <- max_count * 0.18
+
+df_box <- tibble(q1=q1, q3=q3, med=med, w_low=w_low, w_high=w_high,
+                 y=y_pos, ymin=y_pos - box_h/2, ymax=y_pos + box_h/2)
+
+df_out <- tibble(x = outs, y = y_pos)
+
+ggplot(df_app, aes(x = metacritic_score)) +
+  geom_histogram(bins = 30, fill = "grey70", color = "white") +
+
+  # IQR box
+  geom_rect(
+    data = df_box,
+    aes(xmin = q1, xmax = q3, ymin = ymin, ymax = ymax),
+    inherit.aes = FALSE,
+    fill = "white", color = "black", linewidth = 0.7
+  ) +
+  # median line
+  geom_segment(
+    data = df_box,
+    aes(x = med, xend = med, y = ymin, yend = ymax),
+    inherit.aes = FALSE,
+    color = "black", linewidth = 0.9
+  ) +
+  # whiskers
+  geom_segment(
+    data = df_box,
+    aes(x = w_low, xend = q1, y = y, yend = y),
+    inherit.aes = FALSE,
+    color = "black", linewidth = 0.7
+  ) +
+  geom_segment(
+    data = df_box,
+    aes(x = q3, xend = w_high, y = y, yend = y),
+    inherit.aes = FALSE,
+    color = "black", linewidth = 0.7
+  ) +
+  # whisker caps
+  geom_segment(
+    data = df_box,
+    aes(x = w_low, xend = w_low, y = ymin, yend = ymax),
+    inherit.aes = FALSE,
+    color = "black", linewidth = 0.7
+  ) +
+  geom_segment(
+    data = df_box,
+    aes(x = w_high, xend = w_high, y = ymin, yend = ymax),
+    inherit.aes = FALSE,
+    color = "black", linewidth = 0.7
+  ) +
+  # outliers
+  geom_point(
+    data = df_out,
+    aes(x = x, y = y),
+    inherit.aes = FALSE,
+    shape = 16, size = 1.8, color = "black"
+  ) +
+
+  coord_cartesian(ylim = c(0, max_count * 1.15)) +
+  labs(
+    title = "Histogram with Boxplot Overlay",
+    x = "Metacritic Score",
+    y = "Count"
+  ) +
+  theme_minimal()
+
+```
+
+### Visualizing Groups
+
+```{r}
+# Splitting data into year groups
+df_app <- df_app %>%
+  mutate(
+    release_date_parsed = ymd(release_date, quiet = TRUE),
+    release_year = as.integer(year(release_date_parsed))
+  ) %>%
+  filter(!is.na(release_date_parsed),
+         release_year >= 2000,
+        release_year <= 2024) %>%
+  select(-release_date_parsed)
+df_app <- df_app %>%
+  mutate(
+    year_group = cut(
+      release_year,
+      breaks = seq(2000, 2025, by = 5),
+      right = FALSE,
+      include.lowest = TRUE,
+      labels = c(
+        "2000–2004",
+        "2005–2009",
+        "2010–2014",
+        "2015–2019",
+        "2020–2024"
+      )
+    )
+  )
+df_group_stat <- df_app |> 
+      group_by(year_group) |> 
+      summarise(
+        mean_score = mean(metacritic_score),
+        sd_score = sd(metacritic_score),
+        count = n()
+      )
+df_group_stat
+```
+
+```{r}
+# Boxplots
+ggplot(df_app, aes(x = metacritic_score, y = year_group)) +
+  geom_boxplot(outlier.size = 1.5) +
+  labs(
+    title = "Boxplots of Metacritic Score by Release Year Group",
+    x = "Metacritic Score",
+    y = "Release Year Group"
+  ) +
+  theme_minimal()
+```
+
+```{r}
+# Mean and standard deviation plots
+df_group_stat <- df_group_stat |> 
+    mutate(
+    lower = mean_score - sd_score,
+    upper = mean_score + sd_score
+  )
+ggplot(df_group_stat, aes(y = year_group)) +
+  geom_errorbar(aes(xmin = lower, xmax = upper), width = 0.25) +
+  geom_point(aes(x = mean_score), shape = 8, size = 4) +  # star at mean
+  labs(
+    title = "Mean and standard deviation plot of the groups",
+    x = "Metacritic score",
+    y = "Year group"
+  ) +
+  theme_classic()
+```
+
+```{r}
+df_plot <- df_app %>%
+  filter(is.finite(metacritic_score)) %>%
+  mutate(
+    year_group = factor(year_group),
+    x = as.numeric(year_group)
+  )
+
+ggplot(df_plot, aes(y = metacritic_score)) +
+
+  stat_slab(
+    aes(x = x - 0.07),
+    side = "left",
+    scale = 0.5,
+    fill = "grey90",
+    color = "grey30"
+  ) +
+
+  geom_point(
+    aes(x = x + 0.06),
+    position = position_jitter(width = 0.06, height = 0),
+    size = 1.6,
+    alpha = 0.7
+  ) +
+
+  scale_x_continuous(
+    breaks = seq_along(levels(df_plot$year_group)),
+    labels = levels(df_plot$year_group)
+  ) +
+
+  scale_y_continuous(
+    limits = c(0, 100),
+    breaks = seq(0, 100, by = 10)
+  ) +
+
+  labs(
+    title = "Half–half plot: density (left) + raw points (right)",
+    x = "Year group",
+    y = "Metacritic score"
+  ) +
+  theme_classic()
+```
+
+```{r}
+ggplot(df_app, aes(x = metacritic_score, y = year_group)) +
+  geom_density_ridges(
+    scale = 1.1,          # height / overlap of ridges (adjust this)
+    rel_min_height = 0.01,
+    color = "black",
+    fill = "grey75",
+    alpha = 1
+  ) +
+  scale_x_continuous(limits = c(0, 100), breaks = seq(0, 100, 10)) +
+  labs(
+    title = "Ridgeline plots showing the PDF for every group",
+    x = "Metacritic score",
+    y = "Year group"
+  ) +
+  theme_classic()
+
+```
+
+```{r}
+dbDisconnect(con)
+```

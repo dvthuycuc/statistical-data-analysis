@@ -1,0 +1,301 @@
+---
+title: "statistical learning"
+format: html
+editor: visual
+---
+
+### Import libraries and get data
+
+```{r}
+library(duckdb)
+library(dplyr)
+library(ggplot2)
+library(stringr)
+library(qqplotr)
+source("helper.R")
+
+db_path <- Sys.getenv("STEAM_DB_PATH", "C:/Users/TCC/Documents/git_cuc/teaching-data/steam_data/steam_data.duckdb")
+con <- dbConnect(duckdb::duckdb(), db_path)
+df_app <- dbReadTable(con, "STEAM_APPDETAILS")
+df_players <- dbReadTable(con, "STEAM_NUM_PLAYERS")
+df_avg_players <- df_players |> group_by(appid) |>
+  summarise(
+    avg_player = round(mean(num_players, na.rm = TRUE)),
+    .groups = "drop"
+  )
+df_app <- df_app |>
+  left_join(df_avg_players, by = "appid")
+```
+
+### Descriptive Statistic of Metacritic Score
+
+```{r}
+mean_score <- mean(df_app$metacritic_score)
+median_score  <- median(df_app$metacritic_score)
+mode_score  <- mode_value(df_app$metacritic_score)
+
+cat("Mean Metacritic score:", mean_score, "\n")
+cat("Median Metacritic score:", median_score, "\n")
+cat("Mode Metacritic score:", mode_score, "\n")
+cat(
+  "Interpretation:\n",
+  "- The mean and median have a big difference because the distribution is skewed.\n",
+  "- Many apps do not have a Metacritic score and are recorded as 0.\n",
+  "- These zero values pull the mean downward and create a spike at 0.\n"
+)
+
+# Visualization
+draw_histogram(
+  df_app$metacritic_score,
+  title = "Histogram of Metacritic Scores",
+  x_label = "Metacritic Score"
+)
+```
+
+### Filter out all the app has score equal 0
+
+```{r}
+df_app_metascore <- df_app |>
+  filter(metacritic_score > 0) 
+
+mean_score <- mean(df_app_metascore$metacritic_score)
+median_score  <- median(df_app_metascore$metacritic_score)
+mode_score  <- mode_value(df_app_metascore$metacritic_score)
+
+cat("Mean Metacritic score:", mean_score, "\n")
+cat("Median Metacritic score:", median_score, "\n")
+cat("Mode Metacritic score:", mode_score, "\n")
+```
+
+```{r}
+df_app_metascore <- df_app |>
+  filter(metacritic_score > 0) 
+df_app_metascore <- df_app |>
+  filter(metacritic_score > 0)
+ggplot(df_app_metascore, aes(x = metacritic_score)) +
+  geom_histogram(aes(y = after_stat(density)),
+                 bins = 30, fill = "lightblue", color = "white") +
+  geom_density(color = "red", linewidth = 1) +
+  labs(
+    title = "Metacritic Score: Histogram & Density",
+    x = "Metacritic Score",
+    y = "Density"
+  ) +
+  theme_minimal()
+```
+
+```{r}
+lowest_apps <- df_app_metascore |>
+  filter(metacritic_score == min(metacritic_score, na.rm = TRUE)) |>
+  select(appid, name, metacritic_score)
+lowest_apps
+
+```
+
+```{r}
+highest_apps <- df_app_metascore |>
+  filter(metacritic_score == max(metacritic_score, na.rm = TRUE)) |>
+  select(appid, name, metacritic_score)
+highest_apps
+```
+
+```{r}
+ggplot(data.frame(score = df_app_metascore$metacritic_score), aes(sample = score)) +
+  stat_qq_band()+
+  stat_qq_point() +
+  stat_qq_line(color = "red") +
+  labs(
+    title = "Q-Q Plot of Metacritic Scores",
+    x = "Theoretical Quantiles",
+    y = "Sample Quantiles"
+  )
+```
+
+```{r}
+shapiro.test(df_app_metascore$metacritic_score)
+```
+
+```{r}
+df_dev_count <- df_app_metascore |>
+  filter(!is.na(publishers), publishers != "") |>
+  group_by(publishers) |>
+  summarise(
+    n_apps = n_distinct(appid),
+    .groups = "drop"
+  ) |>
+  arrange(desc(n_apps))
+df_dev_count
+```
+
+```{r}
+df_app_paid <- df_app |>
+  filter(!is.na(price), str_detect(price, "€")) |>
+  mutate(
+    price = as.numeric(
+      str_replace_all(price, "[^0-9,\\.]", "") |> 
+      str_replace(",", ".")
+    )
+  )
+ggplot(df_app_paid, aes(x = log(price))) +
+  geom_histogram(aes(y = after_stat(density)),
+                 bins = 30, fill = "lightblue", color = "white") +
+  geom_density(color = "red", linewidth = 1) +
+  labs(
+    title = "Metacritic Score: Histogram & Density",
+    x = "Price",
+    y = "Density"
+  ) +
+  theme_minimal()
+
+df_app_paid |> 
+  ggplot(
+    aes(
+      sample = log(price)
+    )
+  )+
+  stat_qq_band()+
+  stat_qq_point()
+
+df_app_paid
+```
+
+```{r}
+ggplot(df_app, aes(x = log(avg_player))) +
+  geom_histogram(aes(y = after_stat(density)),
+                 bins = 30, fill = "lightblue", color = "white") +
+  geom_density(color = "red", linewidth = 1) +
+  labs(
+    title = "Metacritic Score: Histogram & Density",
+    x = "Price",
+    y = "Density"
+  ) +
+  theme_minimal()
+```
+
+```{r}
+df_app_free <- df_app |>
+  filter(is_free == TRUE)
+df_app_free_metascore <- df_app_free |>
+  filter(metacritic_score > 0)
+
+df_app_not_free <- df_app |>
+  filter(is_free == FALSE)
+df_app_not_free_metascore <- df_app_not_free |>
+  filter(metacritic_score > 0)
+
+
+
+```
+
+```{r}
+ggplot() +
+  geom_histogram(
+    data = subset(df_app_metascore, is_free == 1),
+    aes(x = metacritic_score),
+    bins = 20,
+    fill = "steelblue",
+    alpha = 0.5,
+    position = "identity"
+  ) +
+  geom_histogram(
+    data = subset(df_app_metascore, is_free == 0),
+    aes(x = metacritic_score),
+    bins = 20,
+    fill = "orange",
+    alpha = 0.5,
+    position = "identity"
+  ) +
+  labs(
+    title = "Metacritic Score Comparison: Free vs Paid",
+    x = "Metacritic Score",
+    y = "Count"
+  ) +
+  theme_minimal()
+
+```
+
+Hypothesis: does the app that has to buy having Metacritic score than free app
+
+```{r}
+ggplot(df_app_metascore, aes(x = factor(is_free), y = metacritic_score, fill = factor(is_free))) +
+  geom_boxplot() +
+  scale_x_discrete(labels = c("Paid", "Free")) +
+  labs(
+    x = "App Type",
+    y = "Metacritic Score",
+    title = "Metacritic Score: Paid vs Free Apps"
+  ) +
+  theme(legend.position = "none")
+```
+
+```{r}
+shapiro.test(df_app_metascore$metacritic_score[df_app_metascore$is_free == 0])
+shapiro.test(df_app_metascore$metacritic_score[df_app_metascore$is_free == 1])
+```
+
+```{r}
+wilcox.test(
+  metacritic_score ~ is_free,
+  data = df_app_metascore,
+  alternative = "greater",  # Paid > Free
+  exact = FALSE
+)
+```
+
+```{r}
+df_app_metascore <- df_app_metascore |>
+  mutate(high_metascore = if_else(metacritic_score >= 80, 1L, 0L))
+
+ggplot() +
+  geom_histogram(
+    data = subset(df_app_metascore, high_metascore == 1),
+    aes(x = log(total_recommendations)),
+    bins = 20,
+    fill = "steelblue",
+    alpha = 0.5,
+    position = "identity"
+  ) +
+  geom_histogram(
+    data = subset(df_app_metascore, high_metascore == 0),
+    aes(x = log(total_recommendations)),
+    bins = 20,
+    fill = "orange",
+    alpha = 0.5,
+    position = "identity"
+  ) +
+  labs(
+    title = "Metacritic Score Comparison: Free vs Paid",
+    x = "Metacritic Score",
+    y = "Count"
+  ) +
+  theme_minimal()
+
+```
+
+```{r}
+ggplot(df_app_metascore, aes(x = factor(high_metascore), y = log(total_recommendations), fill = factor(high_metascore))) +
+  geom_boxplot() +
+  scale_x_discrete(labels = c("Low Score", "High Score")) +
+  labs(
+    x = "App Type",
+    y = "Total Recommendations",
+    title = "Metacritic Score: Paid vs Free Apps"
+  ) +
+  theme(legend.position = "none")
+```
+
+```{r}
+shapiro.test(df_app_metascore$metacritic_score[df_app_metascore$high_metascore == 0])
+shapiro.test(df_app_metascore$metacritic_score[df_app_metascore$high_metascore == 1])
+```
+
+##### Apps with low Metacritic scores tend to have fewer total recommendations than apps with high Metacritic scores.
+
+```{r}
+wilcox.test(
+  total_recommendations ~ high_metascore,
+  data = df_app_metascore,
+  alternative = "less",
+  exact = FALSE
+)
+```
