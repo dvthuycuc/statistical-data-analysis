@@ -321,59 +321,89 @@ server <- function(input, output, session) {
   output$gb_board <- renderPlot({
     rows <- input$gb_rows
     
-    # peg grid coordinates (triangular)
+    # --- pegs (triangle) ---
     pegs <- purrr::map_dfr(1:rows, function(r) {
       tibble::tibble(
-        row = r,
         x = seq(-r + 1, r - 1, by = 2),
         y = -r
       )
     })
     
-    balls <- gb$balls %>%
-      dplyr::mutate(
-        x = col,
-        y = -row
-      )
+    # --- falling balls ---
+    falling <- gb$balls %>%
+      dplyr::mutate(x = col, y = -row)
+    
+    # --- holder/bin geometry (bins = 0..rows) ---
+    # bin centers in x are -rows, -rows+2, ..., rows
+    bin_centers <- seq(-rows, rows, by = 2)
+    bin_edges   <- seq(-rows - 1, rows + 1, by = 2)  # walls between bins
+    
+    # vertical walls from y = -(rows+1) down to y = -(rows+1) - holder_h
+    holder_h <- max(6, ceiling(rows * 0.6))
+    y_top <- -(rows + 1)
+    y_bot <- y_top - holder_h
+    
+    walls <- tibble::tibble(
+      x = bin_edges,
+      xend = bin_edges,
+      y = y_top,
+      yend = y_bot
+    )
+    
+    floor <- tibble::tibble(
+      x = min(bin_edges),
+      xend = max(bin_edges),
+      y = y_bot,
+      yend = y_bot
+    )
+    
+    # --- stacked landed balls in bins ---
+    # gb$landed is 0..rows (number of rights)
+    if (length(gb$landed) > 0) {
+      counts <- tibble::tibble(bin = gb$landed) %>%
+        dplyr::count(bin, name = "n") %>%
+        dplyr::mutate(
+          x = -rows + 2 * bin
+        )
+      
+      # build stacked (x, y) positions: y goes down row-by-row inside holder
+      stacked <- counts %>%
+        tidyr::uncount(n, .remove = FALSE, .id = "stack_id") %>%
+        dplyr::mutate(
+          y = y_bot + 0.8 + (stack_id - 1) * 0.9   # spacing
+        ) %>%
+        # keep only those visible inside the holder
+        dplyr::filter(y <= y_top - 0.4)
+    } else {
+      stacked <- tibble::tibble(x = numeric(0), y = numeric(0))
+    }
     
     ggplot2::ggplot() +
-      ggplot2::geom_point(data = pegs, ggplot2::aes(x = x, y = y), size = 1.6, alpha = 0.6) +
-      ggplot2::geom_point(data = balls, ggplot2::aes(x = x, y = y), size = 2.6) +
+      # pegs
+      ggplot2::geom_point(data = pegs, ggplot2::aes(x = x, y = y),
+                          size = 1.4, alpha = 0.6) +
+      
+      # holder walls + floor
+      ggplot2::geom_segment(data = walls,
+                            ggplot2::aes(x = x, y = y, xend = xend, yend = yend),
+                            linewidth = 0.5) +
+      ggplot2::geom_segment(data = floor,
+                            ggplot2::aes(x = x, y = y, xend = xend, yend = yend),
+                            linewidth = 0.8) +
+      
+      # stacked landed balls (inside holder)
+      ggplot2::geom_point(data = stacked, ggplot2::aes(x = x, y = y),
+                          size = 2.2) +
+      
+      # falling balls
+      ggplot2::geom_point(data = falling, ggplot2::aes(x = x, y = y),
+                          size = 2.4) +
+      
       ggplot2::coord_fixed() +
-      ggplot2::theme_minimal() +
-      ggplot2::labs(
-        title = "Galton board (pegs + falling balls)",
-        x = NULL, y = NULL
-      ) +
-      ggplot2::theme(
-        axis.text = ggplot2::element_blank(),
-        axis.ticks = ggplot2::element_blank(),
-        panel.grid = ggplot2::element_blank()
-      )
+      ggplot2::theme_void() +
+      ggplot2::labs(title = "Galton board + holder (bins)")
   })
   
-  # histogram of landed bins
-  output$gb_hist <- renderPlot({
-    rows <- input$gb_rows
-    if (length(gb$landed) == 0) {
-      ggplot2::ggplot() +
-        ggplot2::theme_minimal() +
-        ggplot2::labs(title = "Bin counts", x = "Bin (number of rights)", y = "Count") +
-        ggplot2::annotate("text", x = 1, y = 1, label = "Press Start", hjust = 0)
-    } else {
-      d <- tibble::tibble(bin = gb$landed)
-      ggplot2::ggplot(d, ggplot2::aes(x = bin)) +
-        ggplot2::geom_histogram(bins = rows + 1) +
-        ggplot2::theme_minimal() +
-        ggplot2::labs(
-          title = "Distribution of final bins (CLT demo)",
-          subtitle = "As balls increase, this approaches a bell shape",
-          x = "Bin (number of rights)",
-          y = "Count"
-        ) +
-        ggplot2::scale_x_continuous(breaks = 0:rows)
-    }
-  })
   
 }
 
