@@ -12,6 +12,7 @@ library(dplyr)
 library(ggplot2)
 library(stringr)
 library(qqplotr)
+library(jsonlite)
 source("helper.R")
 
 db_path <- Sys.getenv("STEAM_DB_PATH", "C:/Users/TCC/Documents/git_cuc/teaching-data/steam_data/steam_data.duckdb")
@@ -25,6 +26,8 @@ df_avg_players <- df_players |> group_by(appid) |>
   )
 df_app <- df_app |>
   left_join(df_avg_players, by = "appid")
+
+df_app$price_eur <- apply(df_app, 1, convert_price_euro) 
 ```
 
 ### Descriptive Statistic of Metacritic Score
