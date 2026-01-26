@@ -1,0 +1,168 @@
+---
+title: "3_classification_model"
+format: html
+editor: visual
+---
+
+## Import Libraries and Data
+
+```{r}
+library(duckdb)
+library(dplyr)
+library(ggplot2)
+library(stringr)
+library(qqplotr)
+source("helper.R")
+library(jsonlite)
+library(rpart)
+library(rpart.plot)
+library(caret)
+
+db_path <- Sys.getenv("STEAM_DB_PATH", "C:/Users/TCC/Documents/git_cuc/teaching-data/steam_data/steam_data.duckdb")
+con <- dbConnect(duckdb::duckdb(), db_path)
+df_app <- dbReadTable(con, "STEAM_APPDETAILS")|> 
+  filter(type == "game")
+df_players <- dbReadTable(con, "STEAM_NUM_PLAYERS")
+df_categories <- dbReadTable(con, "STEAM_CATEGORIES")
+df_genres <- dbReadTable(con, "STEAM_GENRES")
+df_avg_players <- df_players |> group_by(appid) |>
+  summarise(
+    avg_player = round(mean(num_players, na.rm = TRUE)),
+    median_player = round(median(num_players, na.rm = TRUE)),
+    .groups = "drop"
+  )
+df_app <- df_app |>
+  left_join(df_avg_players, by = "appid") |>
+  filter(metacritic_score > 0,
+         avg_player>0)
+
+df_genres <- df_genres |>
+  left_join(
+    df_app |> select(appid, avg_player),
+    by = "appid"
+  ) |> 
+  filter(avg_player>0)
+
+df_categories <- df_categories |>
+  left_join(
+    df_app |> select(appid, avg_player),
+    by = "appid"
+  ) |> 
+  filter(avg_player>0)
+
+df_app$price_eur <- apply(df_app, 1, convert_price_euro)
+df_app <- df_app |>
+  filter(!is.na(price_eur))
+```
+
+#### Filter avg_player outliers
+
+```{r}
+q1_avg_player = quantile(df_app$avg_player, 0.25)
+q3_avg_player = quantile(df_app$avg_player, 0.75)
+iqr_avg_player = q3_avg_player - q1_avg_player
+min_avg_player = q1_avg_player - 1.5*iqr_avg_player
+max_avg_player = q3_avg_player + 1.5*iqr_avg_player
+
+df_app <- df_app |> 
+  filter(avg_player > min_avg_player & avg_player < max_avg_player)
+```
+
+#### Classify avg_player class based on Percentile
+
+```{r}
+df_app <- df_app |>
+  mutate(
+    avg_player_class = cut(
+      avg_player,
+      breaks = quantile(avg_player, probs = c(0, 1/3, 2/3, 1), na.rm = TRUE),
+      include.lowest = TRUE,
+      labels = c("Low", "Mid", "High")
+    )
+  )
+df_price <- df_app |> 
+  group_by(
+    avg_player_class
+  ) |> 
+  summarise(
+    num = n(),
+    min_avg_player = min(avg_player, na.rm = TRUE),
+    max_avg_player = max(avg_player, na.rm = TRUE),
+    mean_price = mean(price_eur),
+    sd_price = sqrt(var(price_eur))
+  )
+df_price
+```
+
+```{r}
+with(df_app, t.test(price_eur[avg_player_class == "Low"],
+                    price_eur[avg_player_class == "Mid"]))
+```
+
+If a publisher, want to publish a game with price 5.99, rating age 0, exper's prediction meta score is 60, which prediction player class?
+
+```{r}
+set.seed(123)
+idx <- sample(
+  c(TRUE, FALSE),
+  size = nrow(df_app),
+  replace = TRUE,
+  prob = c(0.8, 0.2)
+)
+
+train <- df_app[idx, ]
+test  <- df_app[!idx, ]
+```
+
+```{r}
+tree_model <- rpart(
+  avg_player_class ~ price_eur + metacritic_score + rating_age,
+  data = train,
+  method = "class",
+  control = rpart.control(
+    cp = 0.01,
+    minsplit = 20
+  )
+)
+```
+
+```{r}
+rpart.plot(
+  tree_model,
+  type = 2,
+  extra = 104,
+  fallen.leaves = TRUE
+)
+
+```
+
+```{r}
+pred_class <- predict(tree_model, test, type = "class")
+confusionMatrix(
+  factor(pred_class, levels = levels(test$avg_player_class)),
+  test$avg_player_class
+)
+
+```
+
+```{r}
+new_game <- tibble::tibble(
+  price_eur = 9.99,
+  metacritic_score = 70,
+  rating_age = 13
+)
+predict(tree_model, newdata = new_game, type = "class")
+```
+
+```{r}
+df_age <- df_app |> 
+  group_by(
+    avg_player_class
+  ) |> 
+  summarise(
+    num = n(),
+    mean_rating_age = mean(rating_age),
+    sd_rating_age = sqrt(var(rating_age))
+  )
+df_age
+```

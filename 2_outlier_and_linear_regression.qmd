@@ -1,0 +1,159 @@
+---
+title: "2_outlier_and_linear_regression"
+format: html
+editor: visual
+---
+
+## Import Libraries and Data
+
+```{r}
+library(duckdb)
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(stringr)
+library(qqplotr)
+source("helper.R")
+library(jsonlite)
+set.seed(123)
+
+db_path <- Sys.getenv("STEAM_DB_PATH", "C:/Users/TCC/Documents/git_cuc/teaching-data/steam_data/steam_data.duckdb")
+con <- dbConnect(duckdb::duckdb(), db_path)
+df_app <- dbReadTable(con, "STEAM_APPDETAILS") |> 
+  filter(type == "game")
+df_players <- dbReadTable(con, "STEAM_NUM_PLAYERS")
+df_avg_players <- df_players |> group_by(appid) |>
+  summarise(
+    avg_player = round(mean(num_players, na.rm = TRUE)),
+    .groups = "drop"
+  )
+df_app <- df_app |>
+  left_join(df_avg_players, by = "appid") |> 
+  filter(!is.na(total_recommendations),
+         !is.na(avg_player))
+```
+
+### Check relationship between number of player vs total recommendations
+
+```{r}
+ggplot(df_app, aes(x = total_recommendations, y = avg_player)) +
+  geom_point(alpha = 0.6) +
+  geom_smooth(method = "lm", se = TRUE, color = "blue") +
+  labs(
+    title = "Avg Player vs Total Tecommendations",
+    x = "Total Recommendations",
+    y = "Avg Player"
+  ) +
+  theme_minimal()
+```
+
+```{r}
+boxplot(
+  df_app$avg_player,
+  main = "Distribution of Avg Player",
+  ylab = "Avg Player"
+)
+```
+
+```{r}
+cat("Game has highest players: ", df_app$name[which.max(df_app$avg_player)])
+```
+
+### Remove outliers by IQR method
+
+```{r}
+q1_avg_player = quantile(df_app$avg_player, 0.25)
+q3_avg_player = quantile(df_app$avg_player, 0.75)
+iqr_avg_player = q3_avg_player - q1_avg_player
+min_avg_player = q1_avg_player - 1.5*iqr_avg_player
+max_avg_player = q3_avg_player + 1.5*iqr_avg_player
+
+df_app <- df_app |>
+   filter(!is.na(total_recommendations))
+q1_recommendations = quantile(df_app$total_recommendations, 0.25)
+q3_recommendations = quantile(df_app$total_recommendations, 0.75)
+iqr_recommendations = q3_recommendations - q1_recommendations
+min_recommendations = q1_recommendations - 1.5*iqr_recommendations
+max_recommendations = q3_recommendations + 1.5*iqr_recommendations
+
+df_app <- df_app |> 
+  filter(avg_player > min_avg_player & avg_player < max_avg_player) |> 
+  filter(total_recommendations>min_recommendations & total_recommendations < max_recommendations) 
+```
+
+### Recheck relationship between number of player vs total recommendations
+
+```{r}
+ggplot(df_app, aes(x = total_recommendations, y = avg_player)) +
+  geom_point(alpha = 0.6) +
+  geom_smooth(method = "lm", se = TRUE, color = "blue") +
+  labs(
+    title = "Avg Player vs Total Tecommendations",
+    x = "Total Recommendations",
+    y = "Avg Player"
+  ) +
+  theme_minimal()
+```
+
+### Split data into train and test
+
+```{r}
+idx <- sample(
+  c(TRUE, FALSE),
+  size = nrow(df_app),
+  replace = TRUE,
+  prob = c(0.8, 0.2)
+)
+
+train <- df_app[idx, ]
+test  <- df_app[!idx, ]
+```
+
+### Train model
+
+```{r}
+m_train <- lm(avg_player ~ total_recommendations, data = train)
+test<- test |>
+  mutate(
+    pred_avg_player = predict(m_train, newdata = test),
+  )
+rmse <- sqrt(mean((test_not_log$avg_player - test_not_log$pred_avg_player)^2, na.rm = TRUE))
+cat("Root Mean Square Error: ", rmse)
+```
+
+```{r}
+test <- test |>
+  arrange(avg_player) |>
+  mutate(id = row_number())
+
+ggplot(test, aes(x = id)) +
+  geom_line(aes(y = avg_player, color = "Actual"), linewidth = 1) +
+  geom_line(aes(y = pred_avg_player, color = "Predicted"), linewidth = 1) +
+  scale_color_manual(
+    values = c("Actual" = "black", "Predicted" = "blue")
+  ) +
+  labs(
+    title = "Actual vs Predicted Average Players",
+    x = "Game Id",
+    y = "Average Players",
+    color = ""
+  ) +
+  theme_minimal()
+```
+
+```{r}
+df_app <- df_app |>
+  mutate(
+    log_rec = log1p(total_recommendations),
+    log_avg = log1p(avg_player)
+  )
+ggplot(df_app, aes(x = log_rec, y = log_avg)) +
+  geom_point(alpha = 0.6) +
+  geom_smooth(method = "lm", se = TRUE, color = "blue") +
+  labs(
+    title = "Avg Player vs Total Tecommendations",
+    x = "Total Recommendations",
+    y = "Avg Player"
+  ) +
+  theme_minimal()
+```

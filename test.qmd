@@ -1,0 +1,261 @@
+---
+title: "test"
+format: html
+---
+
+```{r}
+library(duckdb)
+library(dplyr)
+library(ggplot2)
+library(stringr)
+library(qqplotr)
+source("helper.R")
+library(jsonlite)
+
+db_path <- Sys.getenv("STEAM_DB_PATH", "C:/Users/TCC/Documents/git_cuc/teaching-data/steam_data/steam_data.duckdb")
+con <- dbConnect(duckdb::duckdb(), db_path)
+df_app <- dbReadTable(con, "STEAM_APPDETAILS")
+df_players <- dbReadTable(con, "STEAM_NUM_PLAYERS")
+df_categories <- dbReadTable(con, "STEAM_CATEGORIES")
+df_genres <- dbReadTable(con, "STEAM_GENRES")
+df_avg_players <- df_players |> group_by(appid) |>
+  summarise(
+    avg_player = round(mean(num_players, na.rm = TRUE)),
+    median_player = round(median(num_players, na.rm = TRUE)),
+    .groups = "drop"
+  )
+df_app <- df_app |>
+  left_join(df_avg_players, by = "appid") |> 
+  filter(metacritic_score > 0)
+
+df_genres <- df_genres |>
+  left_join(
+    df_app |> select(appid, avg_player),
+    by = "appid"
+  ) |> 
+  filter(avg_player>0)
+
+df_categories <- df_categories |>
+  left_join(
+    df_app |> select(appid, avg_player),
+    by = "appid"
+  ) |> 
+  filter(avg_player>0)
+
+df_app$price_eur <- apply(df_app, 1, convert_price_euro)
+df_app <- df_app |>
+  filter(!is.na(price_eur))
+
+```
+
+```{r}
+ggplot(df_app, aes(x = price_eur, y = metacritic_score)) +
+  geom_point(alpha = 0.6) +
+  geom_smooth(method = "lm", se = TRUE, color = "blue") +
+  labs(
+    title = "Metacritic Score vs Price (EUR)",
+    x = "Price (EUR)",
+    y = "Metacritic Score"
+  ) +
+  theme_minimal()
+```
+
+```{r}
+ggplot(df_app, aes(x = price_eur, y = median_player)) +
+  geom_point(alpha = 0.6) +
+  geom_smooth(method = "lm", se = TRUE, color = "blue") +
+  labs(
+    title = "Avg Player vs Price (EUR)",
+    x = "Price (EUR)",
+    y = "Avg Player"
+  ) +
+  theme_minimal()
+```
+
+```{r}
+ggplot(df_app, aes(x = metacritic_score, y = avg_player)) +
+  geom_point(alpha = 0.6) +
+  geom_smooth(method = "lm", se = TRUE, color = "blue") +
+  labs(
+    title = "Avg Player vs Price (EUR)",
+    x = "Price (EUR)",
+    y = "Avg Player"
+  ) +
+  theme_minimal()
+```
+
+```{r}
+ggplot(df_app, aes(x = total_recommendations, y = avg_player)) +
+  geom_point(alpha = 0.6) +
+  geom_smooth(method = "lm", se = TRUE, color = "blue") +
+  labs(
+    title = "Avg Player vs total_recommendations",
+    x = "total_recommendations",
+    y = "Avg Player"
+  ) +
+  theme_minimal()
+```
+
+```{r}
+boxplot(
+  df_app$avg_player,
+  main = "Distribution of Avg Player",
+  ylab = "Avg Player"
+)
+cat("Game has highest players: ", df_app$name[which.max(df_app$avg_player)])
+```
+
+```{r}
+q1_avg_player = quantile(df_app$avg_player, 0.25)
+q3_avg_player = quantile(df_app$avg_player, 0.75)
+iqr_avg_player = q3_avg_player - q1_avg_player
+min_avg_player = q1_avg_player - 1.5*iqr_avg_player
+max_avg_player = q3_avg_player + 1.5*iqr_avg_player
+
+df_app <- df_app |>
++   filter(!is.na(total_recommendations))
+q1_recommendations = quantile(df_app$total_recommendations, 0.25)
+q3_recommendations = quantile(df_app$total_recommendations, 0.75)
+iqr_recommendations = q3_recommendations - q1_recommendations
+min_recommendations = q1_recommendations - 1.5*iqr_recommendations
+max_recommendations = q3_recommendations + 1.5*iqr_recommendations
+
+df_app <- df_app |> 
+  filter(avg_player > min_avg_player & avg_player < max_avg_player) |> 
+  filter(total_recommendations>min_recommendations & total_recommendations < max_recommendations) 
+```
+
+```{r}
+ggplot(df_app, aes(x = metacritic_score, y = avg_player)) +
+  geom_point(alpha = 0.6) +
+  geom_smooth(method = "lm", se = TRUE, color = "blue") +
+  labs(
+    title = "Metacritic Scorer vs Avg Player",
+    x = "Metacritic Scorer",
+    y = "Avg Player"
+  ) +
+  theme_minimal()
+```
+
+```{r}
+ggplot(df_app, aes(x = price_eur, y = metacritic_score )) +
+  geom_point(alpha = 0.6) +
+  geom_smooth(method = "lm", se = TRUE, color = "blue") +
+  labs(
+    title = "Metacritic Score vs Price (EUR)",
+    x = "Price (EUR)",
+    y = "Metacritic Scorer"
+  ) +
+  theme_minimal()
+```
+
+```{r}
+ggplot(df_app, aes(x = price_eur, y = avg_player)) +
+  geom_point(alpha = 0.6) +
+  geom_smooth(method = "lm", se = TRUE, color = "blue") +
+  labs(
+    title = "Avg Player vs Price (EUR)",
+    x = "Price (EUR)",
+    y = "Avg Player"
+  ) +
+  theme_minimal()
+```
+
+```{r}
+ggplot(df_app, aes(x = metacritic_score, y = total_recommendations)) +
+  geom_point(alpha = 0.6) +
+  geom_smooth(method = "lm", se = TRUE, color = "blue") +
+  labs(
+    title = "Total Recommendations vs Metacitic Score",
+    x = "Metacitic Score",
+    y = "Total Recommendations"
+  ) +
+  theme_minimal()
+```
+
+```{r}
+ggplot(df_app, aes(x = total_recommendations, y = avg_player)) +
+  geom_point(alpha = 0.6) +
+  geom_smooth(method = "lm", se = TRUE, color = "blue") +
+  labs(
+    title = "Avg Player vs total_recommendations",
+    x = "total_recommendations",
+    y = "Avg Player"
+  ) +
+  theme_minimal()
+```
+
+```{r}
+df_app$supported_languages <- gsub("<[^>]+>", "", df_app$supported_languages)
+df_app$supported_languages <- gsub("[/?b\\]", "", df_app$supported_languages)
+df_app$supported_languages <- gsub("languages with full audio support", "", df_app$supported_languages)
+df_app$supported_languages <- gsub("\\*", "", df_app$supported_languages)
+df_app <- df_app |>
+  mutate(
+    count_language = sapply(
+      strsplit(supported_languages, ","),
+      function(x) length(unique(trimws(x)))
+    )
+  )
+
+unique_languages <- unique(
+  trimws(
+    unlist(
+      strsplit(df_app$supported_languages, ",")
+    )
+  )
+)
+
+```
+
+```{r}
+ggplot(df_app, aes(x = count_language, y = metacritic_score)) +
+  geom_point(alpha = 0.6) +
+  geom_smooth(method = "lm", se = TRUE, color = "blue") +
+  labs(
+    title = "Count Language vs Metacitic Score",
+    x = "count_language",
+    y = "metacritic_score"
+  ) +
+  theme_minimal()
+
+
+```
+
+```{r}
+ggplot(df_app, aes(x = count_language, y = avg_player)) +
+  geom_point(alpha = 0.6) +
+  geom_smooth(method = "lm", se = TRUE, color = "blue") +
+  labs(
+    title = "Count Language vs avg_player",
+    x = "count_language",
+    y = "avg_player"
+  ) +
+  theme_minimal()
+
+cat(df_app$supported_languages[which.max(df_app$count_language)])
+```
+
+```{r}
+df_genres_group <- df_genres |> 
+  group_by(
+    genres
+  ) |> 
+  summarise(
+    num = n(),
+    mean_player = mean(avg_player),
+    median_player = median(avg_player)
+  ) |> 
+  filter(num>5)
+
+df_categories_group <- df_categories |> 
+  group_by(
+    categories
+  ) |> 
+  summarise(
+    num = n(),
+    mean_player = mean(avg_player),
+    median_player = median(avg_player)
+  ) |> 
+  filter(num>5)
+```

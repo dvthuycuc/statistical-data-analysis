@@ -2,37 +2,7 @@ library(shiny)
 library(dplyr)
 library(ggplot2)
 
-source("topic_content.R")   # defines topic_overview_ui(), topic_descriptive_statistic_ui(), etc.
-
-# --- helper: draw a dice face with base R plot ---
-draw_dice <- function(value) {
-  stopifnot(value %in% 1:6)
-  par(mar = c(0, 0, 0, 0))
-  plot.new()
-  plot.window(xlim = c(0, 1), ylim = c(0, 1))
-  
-  # dice square
-  rect(0.1, 0.1, 0.9, 0.9, col = "white", border = "black", lwd = 3)
-  
-  # pip positions
-  pos <- list(
-    TL = c(0.3, 0.7),  TC = c(0.5, 0.7),  TR = c(0.7, 0.7),
-    ML = c(0.3, 0.5),  MC = c(0.5, 0.5),  MR = c(0.7, 0.5),
-    BL = c(0.3, 0.3),  BC = c(0.5, 0.3),  BR = c(0.7, 0.3)
-  )
-  
-  pips <- switch(
-    as.character(value),
-    "1" = c("MC"),
-    "2" = c("TL", "BR"),
-    "3" = c("TL", "MC", "BR"),
-    "4" = c("TL", "TR", "BL", "BR"),
-    "5" = c("TL", "TR", "MC", "BL", "BR"),
-    "6" = c("TL", "ML", "BL", "TR", "MR", "BR")
-  )
-  
-  for (p in pips) points(pos[[p]][1], pos[[p]][2], pch = 16, cex = 5)
-}
+source("topic_content.R")
 
 ui <- navbarPage(
   "SteamStats Main App",
