@@ -1,6 +1,6 @@
 ---
 title: "3_classification_model"
-format: html
+format: revealjs
 editor: visual
 ---
 
@@ -15,6 +15,7 @@ library(qqplotr)
 source("helper.R")
 library(jsonlite)
 library(rpart)
+library(randomForest)
 library(rpart.plot)
 library(caret)
 
@@ -95,7 +96,7 @@ df_price
 ```
 
 ```{r}
-with(df_app, t.test(price_eur[avg_player_class == "Low"],
+with(df_app, wilcox.test(price_eur[avg_player_class == "Low"],
                     price_eur[avg_player_class == "Mid"]))
 ```
 
@@ -136,20 +137,34 @@ rpart.plot(
 
 ```
 
+### Train performance
+
+```{r}
+pred_class <- predict(tree_model, train, type = "class")
+confusionMatrix(
+  factor(pred_class, levels = levels(train$avg_player_class)),
+  train$avg_player_class
+)
+
+```
+
+### Test performance
+
 ```{r}
 pred_class <- predict(tree_model, test, type = "class")
 confusionMatrix(
   factor(pred_class, levels = levels(test$avg_player_class)),
   test$avg_player_class
 )
-
 ```
 
+### Prediction
+
 ```{r}
-new_game <- tibble::tibble(
+new_game <- tibble(
   price_eur = 9.99,
-  metacritic_score = 70,
-  rating_age = 13
+  metacritic_score = 80,
+  rating_age = 40
 )
 predict(tree_model, newdata = new_game, type = "class")
 ```
@@ -165,4 +180,36 @@ df_age <- df_app |>
     sd_rating_age = sqrt(var(rating_age))
   )
 df_age
+```
+
+## Random Forest model
+
+```{r}
+rf_model <- randomForest(
+  avg_player_class ~ price_eur + metacritic_score + rating_age,
+  data = train,
+  ntree = 300,
+  mtry = 2,
+  importance = TRUE
+)
+```
+
+### Train model
+
+```{r}
+pred_class <- predict(rf_model, train, type = "class")
+confusionMatrix(
+  factor(pred_class, levels = levels(train$avg_player_class)),
+  train$avg_player_class
+)
+```
+
+### Test performance
+
+```{r}
+pred_class <- predict(rf_model, test, type = "class")
+confusionMatrix(
+  factor(pred_class, levels = levels(test$avg_player_class)),
+  test$avg_player_class
+)
 ```

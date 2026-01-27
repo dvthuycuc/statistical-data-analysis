@@ -1,6 +1,6 @@
 ---
 title: "2_outlier_and_linear_regression"
-format: html
+format: revealjs
 editor: visual
 ---
 
@@ -11,6 +11,7 @@ library(duckdb)
 library(dplyr)
 library(tidyr)
 library(ggplot2)
+library(ggrepel)
 library(stringr)
 library(qqplotr)
 source("helper.R")
@@ -36,8 +37,21 @@ df_app <- df_app |>
 ### Check relationship between number of player vs total recommendations
 
 ```{r}
+top_game_avg_player <- df_app %>%
+  slice_max(avg_player, n = 2, with_ties = FALSE)
+
 ggplot(df_app, aes(x = total_recommendations, y = avg_player)) +
   geom_point(alpha = 0.6) +
+    geom_point(
+    data = top_game_avg_player,
+    color = "red",
+    size = 3
+  ) +
+  geom_text_repel(
+    data = top_game_avg_player,
+    aes(label = name),
+    size = 3
+  ) +
   geom_smooth(method = "lm", se = TRUE, color = "blue") +
   labs(
     title = "Avg Player vs Total Tecommendations",
@@ -117,7 +131,7 @@ test<- test |>
   mutate(
     pred_avg_player = predict(m_train, newdata = test),
   )
-rmse <- sqrt(mean((test_not_log$avg_player - test_not_log$pred_avg_player)^2, na.rm = TRUE))
+rmse <- sqrt(mean((test$avg_player - test$pred_avg_player)^2, na.rm = TRUE))
 cat("Root Mean Square Error: ", rmse)
 ```
 
@@ -125,6 +139,9 @@ cat("Root Mean Square Error: ", rmse)
 test <- test |>
   arrange(avg_player) |>
   mutate(id = row_number())
+
+top_game_avg_player <- df_app %>%
+  slice_max(avg_player, n = 2, with_ties = FALSE)
 
 ggplot(test, aes(x = id)) +
   geom_line(aes(y = avg_player, color = "Actual"), linewidth = 1) +
@@ -151,7 +168,7 @@ ggplot(df_app, aes(x = log_rec, y = log_avg)) +
   geom_point(alpha = 0.6) +
   geom_smooth(method = "lm", se = TRUE, color = "blue") +
   labs(
-    title = "Avg Player vs Total Tecommendations",
+    title = "Avg Player vs Total Recommendations",
     x = "Total Recommendations",
     y = "Avg Player"
   ) +

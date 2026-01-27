@@ -259,3 +259,18 @@ df_categories_group <- df_categories |>
   ) |> 
   filter(num>5)
 ```
+
+```{r}
+library(animation)
+
+ani.options(
+  interval = 0.1,
+  nmax = 500
+)
+
+saveHTML(
+  quincunx(),
+  img.name = "galton",
+  htmlfile = "galton.html"
+)
+```

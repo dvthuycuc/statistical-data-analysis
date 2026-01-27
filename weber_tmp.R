@@ -34,7 +34,7 @@ df_sum <- df_app |>
     most_pop_game = name[which.max(metacritic_score)]
   ) |> 
   filter(
-    num_games>2,
+    num_games>5,
     !is.na(publishers)
   )
 
