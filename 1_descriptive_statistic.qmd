@@ -2,8 +2,6 @@
 title: "Descriptive Statitic"
 format: revealjs
 editor: visual
-engine: knitr
-runtime: shiny
 ---
 
 ### Import Libraries and Get Data
@@ -26,6 +24,8 @@ df_app |>
   select(name, metacritic_score) |> 
   head(5)
 ```
+
+![](images/steam_data_retrieval.png)
 
 ### Highest Metacritic Score by Publisher
 

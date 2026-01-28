@@ -6,7 +6,7 @@ editor: visual
 
 ## Import Libraries and Data
 
-```{r}
+```{r setup, message=FALSE, warning=FALSE}
 library(duckdb)
 library(dplyr)
 library(ggplot2)
@@ -96,11 +96,31 @@ df_price
 ```
 
 ```{r}
+df_app |>
+  ggplot(aes(x = price_eur)) +
+  geom_density(
+    fill = "steelblue",
+    alpha = 0.6,
+    linewidth = 1
+  ) +
+  facet_wrap(~ avg_player_class, nrow = 1) +
+  labs(
+    title = "Price Density by Average Player Class",
+    x = "Price (EUR)",
+    y = "Density",
+    caption = "Popularity classes based on avg_player quantiles"
+  ) +
+  theme_minimal()
+```
+
+```{r}
 with(df_app, wilcox.test(price_eur[avg_player_class == "Low"],
                     price_eur[avg_player_class == "Mid"]))
 ```
 
-If a publisher, want to publish a game with price 5.99, rating age 0, exper's prediction meta score is 60, which prediction player class?
+If we plan to release a new game with known features, can we predict whether its daily number of players will be *high*, *medium*, or *low*?
+
+![](images/classification_input_features.png)
 
 ```{r}
 set.seed(123)
@@ -212,4 +232,8 @@ confusionMatrix(
   factor(pred_class, levels = levels(test$avg_player_class)),
   test$avg_player_class
 )
+```
+
+```{r}
+dbDisconnect(con)
 ```

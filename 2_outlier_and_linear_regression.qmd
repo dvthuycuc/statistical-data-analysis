@@ -6,7 +6,7 @@ editor: visual
 
 ## Import Libraries and Data
 
-```{r}
+```{r setup, message=FALSE, warning=FALSE}
 library(duckdb)
 library(dplyr)
 library(tidyr)
@@ -69,10 +69,6 @@ boxplot(
 )
 ```
 
-```{r}
-cat("Game has highest players: ", df_app$name[which.max(df_app$avg_player)])
-```
-
 ### Remove outliers by IQR method
 
 ```{r}
@@ -94,6 +90,8 @@ df_app <- df_app |>
   filter(avg_player > min_avg_player & avg_player < max_avg_player) |> 
   filter(total_recommendations>min_recommendations & total_recommendations < max_recommendations) 
 ```
+
+![](images/iqr_removing_outliers.png)
 
 ### Recheck relationship between number of player vs total recommendations
 
@@ -158,6 +156,22 @@ ggplot(test, aes(x = id)) +
   theme_minimal()
 ```
 
+The distribution of average daily players is heavily skewed toward low values (below 100 players). This imbalance causes the model to favor predictions in the low range, leading to systematic underestimation for games with high player counts.
+
+```{r}
+draw_histogram(
+  df_app$avg_player,
+  title = "Histogram of Daily Average Player",
+  x_label = "Daily Average Player"
+)
+```
+
+This is similar to teaching a baby with 6 pictures of pets: 5 dogs and 1 cat. When asked to predict a new pet, the baby is more likely to say “dog,” not because the cat is wrong, but because dogs appear more often in the training examples.
+
+![](images/bias_in_data.png)
+
+### Optional: Log-transform variables to improve model prediction
+
 ```{r}
 df_app <- df_app |>
   mutate(
@@ -173,4 +187,8 @@ ggplot(df_app, aes(x = log_rec, y = log_avg)) +
     y = "Avg Player"
   ) +
   theme_minimal()
+```
+
+```{r}
+dbDisconnect(con)
 ```
