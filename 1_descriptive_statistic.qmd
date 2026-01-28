@@ -1,6 +1,6 @@
 ---
 title: "Descriptive Statitic"
-format: html
+format: revealjs
 editor: visual
 engine: knitr
 runtime: shiny
@@ -25,6 +25,52 @@ df_app <- dbReadTable(con, "STEAM_APPDETAILS")
 df_app |> 
   select(name, metacritic_score) |> 
   head(5)
+```
+
+### Highest Metacritic Score by Publisher
+
+```{r}
+df_sum <- df_app |> 
+  filter(metacritic_score > 0) |> 
+  group_by(
+    publishers
+  ) |> 
+  summarise(
+    mean_mc_score = mean(metacritic_score),
+    num_games = n(),
+    most_pop_game = name[which.max(metacritic_score)]
+  ) |> 
+  filter(
+    num_games > 5,
+    !is.na(publishers)
+  )
+
+df_sum |> 
+  ggplot(
+    aes(
+      x = mean_mc_score,
+      y = reorder(publishers,mean_mc_score),
+      fill = num_games,
+      label = most_pop_game
+    )
+  )+
+  geom_col()+
+  geom_text(
+    x = 1,
+    color = "white",
+    hjust = 0
+  )+
+  scale_x_continuous(
+    expand = c(0,0,0.05,0)
+  )+
+  labs(
+    title = "Publisher vs. Metacritic",
+    x = "Metacritic Score",
+    y = "",
+    fill = "Anzahl an Spielen",
+    caption = "Anzahl Spiele pro Publisher > 5"
+  )+
+  theme_minimal()
 ```
 
 ### Measures of Central Tendency
@@ -220,6 +266,24 @@ ggplot(df_app, aes(x = metacritic_score)) +
   ) +
   theme_minimal()
 
+```
+
+### Check normality of dataset
+
+```{r}
+ggplot(data.frame(score = df_app$metacritic_score), aes(sample = score)) +
+  stat_qq_band()+
+  stat_qq_point() +
+  stat_qq_line(color = "red") +
+  labs(
+    title = "Q-Q Plot of Metacritic Scores",
+    x = "Theoretical Quantiles",
+    y = "Sample Quantiles"
+  )
+```
+
+```{r}
+shapiro.test(log(df_app$metacritic_score))
 ```
 
 ### Visualizing Groups
