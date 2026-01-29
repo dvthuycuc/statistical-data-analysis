@@ -166,6 +166,8 @@ ggplot(df_app, aes(x = metacritic_score)) +
     theme_minimal()
 ```
 
+#### Density Plot
+
 ```{r}
 # Density Plot
 ggplot(df_app, aes(x = metacritic_score)) +
