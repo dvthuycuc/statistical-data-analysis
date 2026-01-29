@@ -124,8 +124,13 @@ df_app |>
 #### **Wilcoxon test for price differences between Low and Mid player classes**
 
 ```{r}
-cat(with(df_app, wilcox.test(price_eur[avg_player_class == "Low"],
-                    price_eur[avg_player_class == "Mid"])))
+with(
+  df_app,
+  wilcox.test(
+    price_eur[avg_player_class == "Low"],
+    price_eur[avg_player_class == "Mid"]
+  )
+)
 ```
 
 #### Predicting Player Popularity for a New Game
@@ -158,6 +163,8 @@ tree_model <- rpart(
   )
 )
 ```
+
+#### Decision Model Trees
 
 ```{r}
 rpart.plot(
