@@ -58,7 +58,9 @@ df_categories <- df_categories |>
 df_app$price_eur <- apply(df_app, 1, convert_price_euro)
 df_app <- df_app |>
   filter(!is.na(price_eur))
-df_app |> head(5)
+df_app |> 
+  select(name, price, price_eur ,metacritic_score, avg_player, rating_age) |> 
+  head(5)
 ```
 
 ```{r}
