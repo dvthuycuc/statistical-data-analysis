@@ -2,6 +2,10 @@
 title: "Descriptive Statitic"
 format: revealjs
 editor: visual
+slide-level: 4
+execute: 
+  echo: false
+  output: true
 ---
 
 ### Import Libraries and Get Data
@@ -17,7 +21,7 @@ library(lubridate)
 library(ggridges)
 source("helper.R")
 
-db_path <- Sys.getenv("STEAM_DB_PATH", "C:/Users/TCC/Documents/git_cuc/teaching-data/steam_data/steam_data.duckdb")
+db_path <- db_path <- file.path(getwd(),"data", "steam_data.duckdb")
 con <- dbConnect(duckdb::duckdb(), db_path, read_only = TRUE)
 df_app <- dbReadTable(con, "STEAM_APPDETAILS")
 df_app |> 
