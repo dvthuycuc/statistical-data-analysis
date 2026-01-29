@@ -101,6 +101,8 @@ df_price <- df_app |>
 df_price
 ```
 
+#### Normality check of game prices across player classes
+
 ```{r}
 df_app |>
   ggplot(aes(x = price_eur)) +
@@ -119,10 +121,14 @@ df_app |>
   theme_minimal()
 ```
 
+#### **Wilcoxon test for price differences between Low and Mid player classes**
+
 ```{r}
-with(df_app, wilcox.test(price_eur[avg_player_class == "Low"],
-                    price_eur[avg_player_class == "Mid"]))
+cat(with(df_app, wilcox.test(price_eur[avg_player_class == "Low"],
+                    price_eur[avg_player_class == "Mid"])))
 ```
+
+#### Predicting Player Popularity for a New Game
 
 If we plan to release a new game with known features, can we predict whether its daily number of players will be *high*, *medium*, or *low*?
 
