@@ -58,11 +58,11 @@ df_categories <- df_categories |>
 df_app$price_eur <- apply(df_app, 1, convert_price_euro)
 df_app <- df_app |>
   filter(!is.na(price_eur))
+df_app |> head(5)
 ```
 
-#### Filter avg_player outliers
-
 ```{r}
+# Filter avg_player outliers
 q1_avg_player = quantile(df_app$avg_player, 0.25)
 q3_avg_player = quantile(df_app$avg_player, 0.75)
 iqr_avg_player = q3_avg_player - q1_avg_player
